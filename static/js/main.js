@@ -42,6 +42,26 @@ document.addEventListener('DOMContentLoaded', () => {
             // Display Results
             displayResults(data);
 
+            // Dynamically add to sidebar
+            const caseList = document.querySelector('.case-list');
+            if (caseList) {
+                const newCaseHTML = `
+                    <div class="case-item">
+                        <div class="case-info">
+                            <span class="case-title">新增分析：${text.substring(0, 10)}...</span>
+                            <span class="case-date">${new Date().toISOString().split('T')[0]}</span>
+                        </div>
+                        <p class="case-snippet">${text.substring(0, 50)}...</p>
+                    </div>
+                `;
+                caseList.insertAdjacentHTML('afterbegin', newCaseHTML);
+                // Maintain only top 5 cases in view
+                if (caseList.children.length > 5) {
+                    caseList.removeChild(caseList.lastElementChild);
+                }
+            }
+
+
         } catch (error) {
             console.error('Error:', error);
             alert('分析過程中發生錯誤，請稍後再試。');

@@ -4,8 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>分析儀表板 | AI 法律諮詢助理</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+
 </head>
 <body>
     <div class="dashboard">
@@ -20,7 +21,25 @@
         </header>
 
         <div class="main-grid">
-            <!-- Left: Document Editor -->
+            <!-- Sidebar: Case History -->
+            <div class="sidebar glass-panel">
+                <div class="panel-header">
+                    <h3><i class="fas fa-history" style="color: var(--accent);"></i> 案件紀錄</h3>
+                </div>
+                <div class="case-list">
+                    {% for case in cases %}
+                    <div class="case-item">
+                        <div class="case-info">
+                            <span class="case-title">{{ case.title }}</span>
+                            <span class="case-date">{{ case.date }}</span>
+                        </div>
+                        <p class="case-snippet">{{ case.snippet }}</p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Middle: Document Editor -->
             <div class="editor-section glass-panel">
                 <div class="panel-header">
                     <h3><i class="fas fa-file-contract" style="color: var(--accent);"></i> 專案文件內容</h3>
@@ -58,6 +77,7 @@
             </div>
         </div>
     </div>
+
 
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>

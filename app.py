@@ -52,7 +52,15 @@ def login():
 def dashboard():
     if 'user' not in session:
         return redirect(url_for('index'))
-    return render_template('dashboard.html', username=session['user'])
+    
+    # Initialize mock cases if not present
+    if 'cases' not in session:
+        session['cases'] = [
+            {"id": 1, "title": "民事訴訟：鄰損案件分析", "date": "2024-03-10", "snippet": "關於建築工地施工導致鄰房龜裂之損害賠償..."},
+            {"id": 2, "title": "勞資糾紛：不當解雇諮詢", "date": "2024-03-11", "snippet": "員工主張公司未經預告即終止勞動契約，請求..."},
+        ]
+    
+    return render_template('dashboard.html', username=session['user'], cases=session['cases'])
 
 @app.route('/analyze', methods=['POST'])
 def analyze():
@@ -66,12 +74,30 @@ def analyze():
         return jsonify({"error": "內容不能為空"}), 400
     
     result = simulate_legal_analysis(content)
+    
+    # Save to session history
+    if 'cases' not in session:
+        session['cases'] = []
+    
+    new_case = {
+        "id": len(session['cases']) + 1,
+        "title": f"新增分析：{content[:10]}...",
+        "date": time.strftime("%Y-%m-%d"),
+        "snippet": content[:50] + "..."
+    }
+    # Limit history to top 5
+    session['cases'].insert(0, new_case)
+    session['cases'] = session['cases'][:5]
+    session.modified = True
+    
     return jsonify(result)
 
 @app.route('/logout')
 def logout():
     session.pop('user', None)
+    session.pop('cases', None)
     return redirect(url_for('index'))
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5001) # Using 5001 to avoid conflict with existing app
+    app.run(debug=True, port=5002) 
+
