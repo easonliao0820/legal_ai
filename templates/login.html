@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登入 | AI 法律諮詢助理</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div class="auth-container">
+        <div class="login-card glass-panel">
+            <div class="logo-section">
+                <i class="fas fa-balance-scale logo-icon"></i>
+                <h1>AI 法律諮詢助理</h1>
+                <p>專業、精準、高效的法律文件比對系統</p>
+            </div>
+            
+            <form action="{{ url_for('login') }}" method="POST">
+                <div class="input-group">
+                    <label for="username">用戶名稱</label>
+                    <input type="text" id="username" name="username" placeholder="請輸入您的名稱" required>
+                </div>
+                <div class="input-group">
+                    <label for="password">密碼</label>
+                    <input type="password" id="password" name="password" placeholder="請輸入密碼">
+                </div>
+                <button type="submit" class="btn-primary">進入系統</button>
+            </form>
+            
+            <div style="margin-top: 20px; font-size: 0.8rem; color: var(--text-dim);">
+                &copy; 2026 AI Legal Assistant. All Rights Reserved.
+            </div>
+        </div>
+    </div>
+</body>
+</html>

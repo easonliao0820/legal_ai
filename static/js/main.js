@@ -1,0 +1,88 @@
+document.addEventListener('DOMContentLoaded', () => {
+    const analyzeBtn = document.getElementById('analyze-btn');
+    const docContent = document.getElementById('doc-content');
+    const resultArea = document.getElementById('result-area');
+    const welcomeMsg = document.getElementById('welcome-message');
+    const loadingSpinner = document.getElementById('loading-spinner');
+    const resultsContent = document.getElementById('results-content');
+    const statusBadge = document.getElementById('analysis-status');
+
+    analyzeBtn.addEventListener('click', async () => {
+        const text = docContent.value.trim();
+        if (!text) {
+            alert('請輸入文件內容');
+            return;
+        }
+
+        // UI State Update
+        welcomeMsg.classList.add('hidden');
+        resultsContent.classList.add('hidden');
+        loadingSpinner.classList.remove('hidden');
+        analyzeBtn.disabled = true;
+        analyzeBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 分析中...';
+        statusBadge.innerText = '分析中';
+
+        try {
+            const response = await fetch('/analyze', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ content: text }),
+            });
+
+            const data = await response.json();
+
+            if (data.error) {
+                alert(data.error);
+                resetUI();
+                return;
+            }
+
+            // Display Results
+            displayResults(data);
+
+        } catch (error) {
+            console.error('Error:', error);
+            alert('分析過程中發生錯誤，請稍後再試。');
+            resetUI();
+        }
+    });
+
+    function displayResults(data) {
+        loadingSpinner.classList.add('hidden');
+        resultsContent.classList.remove('hidden');
+        analyzeBtn.disabled = false;
+        analyzeBtn.innerHTML = '<i class="fas fa-magic"></i> 開始 AI 比對分析';
+        statusBadge.innerText = data.status;
+
+        let html = `
+            <div style="margin-bottom: 25px; padding: 15px; background: rgba(59, 130, 246, 0.1); border-radius: 12px; border-left: 4px solid var(--primary-light);">
+                <h4 style="color: var(--text-white); margin-bottom: 5px;">信賴度評分 (Reliability Score)</h4>
+                <div style="height: 10px; background: rgba(255,255,255,0.1); border-radius: 5px; overflow: hidden;">
+                    <div style="width: ${data.score}%; height: 100%; background: linear-gradient(90deg, var(--primary), var(--primary-light));"></div>
+                </div>
+                <p style="font-size: 0.8rem; margin-top: 5px; color: var(--text-dim); text-align: right;">${data.score}/100</p>
+            </div>
+        `;
+
+        data.recommendations.forEach(rec => {
+            html += `
+                <div class="suggestion-card">
+                    <h4><i class="fas fa-check-circle"></i> ${rec.title}</h4>
+                    <p>${rec.content}</p>
+                </div>
+            `;
+        });
+
+        resultsContent.innerHTML = html;
+    }
+
+    function resetUI() {
+        loadingSpinner.classList.add('hidden');
+        welcomeMsg.classList.remove('hidden');
+        analyzeBtn.disabled = false;
+        analyzeBtn.innerHTML = '<i class="fas fa-magic"></i> 開始 AI 比對分析';
+        statusBadge.innerText = '等待輸入';
+    }
+});
