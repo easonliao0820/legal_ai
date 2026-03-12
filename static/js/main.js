@@ -74,26 +74,19 @@ document.addEventListener('DOMContentLoaded', () => {
         resultsContent.classList.remove('hidden');
         analyzeBtn.disabled = false;
         analyzeBtn.innerHTML = '<i class="fas fa-magic"></i> 開始 AI 比對分析';
-        statusBadge.innerText = data.status;
+        statusBadge.innerText = '已完成 AI 比對分析';
+
+        // 轉換 AI 的純文字回應 (保留換行與粗體)
+        const formattedResponse = (data.aiResponse || "").replace(/\\*\\*(.*?)\\*\\*/g, '<b>$1</b>');
 
         let html = `
             <div style="margin-bottom: 25px; padding: 15px; background: rgba(59, 130, 246, 0.1); border-radius: 12px; border-left: 4px solid var(--primary-light);">
-                <h4 style="color: var(--text-white); margin-bottom: 5px;">信賴度評分 (Reliability Score)</h4>
-                <div style="height: 10px; background: rgba(255,255,255,0.1); border-radius: 5px; overflow: hidden;">
-                    <div style="width: ${data.score}%; height: 100%; background: linear-gradient(90deg, var(--primary), var(--primary-light));"></div>
-                </div>
-                <p style="font-size: 0.8rem; margin-top: 5px; color: var(--text-dim); text-align: right;">${data.score}/100</p>
+                <h4 style="color: var(--text-white); margin-bottom: 5px;">AI 法律顧問回覆</h4>
+            </div>
+            <div class="suggestion-card" style="white-space: pre-wrap; line-height: 1.6;">
+                ${formattedResponse}
             </div>
         `;
-
-        data.recommendations.forEach(rec => {
-            html += `
-                <div class="suggestion-card">
-                    <h4><i class="fas fa-check-circle"></i> ${rec.title}</h4>
-                    <p>${rec.content}</p>
-                </div>
-            `;
-        });
 
         resultsContent.innerHTML = html;
     }

@@ -1,9 +1,23 @@
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 import os
+import requests
+import hashlib
+import uuid
+from pymongo import MongoClient
 import time
 
 app = Flask(__name__)
 app.secret_key = "legal_ai_secure_key" # In production, use environment variables
+
+# ---------------- MongoDB ----------------
+MONGO_URI = "mongodb://127.0.0.1:27017/"
+client = MongoClient(MONGO_URI)
+db = client["ai_law"]
+users_collection = db["users"]
+chats_collection = db["chats"]
+
+# ---------------- Node.js AI API ----------------
+NODE_API_URL = "http://localhost:5003/api/analyze"
 
 # --- Mock AI Logic ---
 # Since we are not connecting to the real API yet, we simulate the comparison
@@ -35,69 +49,87 @@ def simulate_legal_analysis(content):
 
 @app.route('/')
 def index():
-    if 'user' in session:
+    if 'user_id' in session:
         return redirect(url_for('dashboard'))
     return render_template('login.html')
 
 @app.route('/login', methods=['POST'])
 def login():
-    # Simple mock login
     username = request.form.get('username')
-    if username:
-        session['user'] = "admin"
+    password = request.form.get('password')
+
+    if not username or not password:
+        return redirect(url_for('index'))
+
+    password_hash = hashlib.sha256(password.encode()).hexdigest()
+    user = users_collection.find_one({"username": username, "password": password})
+
+    if user:
+        session['user_id'] = str(user["_id"])
+        session['username'] = user["username"]
         return redirect(url_for('dashboard'))
-    return redirect(url_for('index'))
+    else:
+        return render_template('login.html', error="帳號或密碼錯誤")
 
 @app.route('/dashboard')
 def dashboard():
-    if 'user' not in session:
+    if 'user_id' not in session:
         return redirect(url_for('index'))
-    
-    # Initialize mock cases if not present
-    if 'cases' not in session:
-        session['cases'] = [
-            {"id": 1, "title": "民事訴訟：鄰損案件分析", "date": "2024-03-10", "snippet": "關於建築工地施工導致鄰房龜裂之損害賠償..."},
-            {"id": 2, "title": "勞資糾紛：不當解雇諮詢", "date": "2024-03-11", "snippet": "員工主張公司未經預告即終止勞動契約，請求..."},
-        ]
-    
-    return render_template('dashboard.html', username=session['user'], cases=session['cases'])
+
+    # 查詢該使用者的最近 5 筆聊天紀錄
+    chats = list(chats_collection.find({"userId": session['user_id']}).sort("createdAt", -1).limit(5))
+    return render_template('dashboard.html', username=session['username'], chats=chats)
 
 @app.route('/analyze', methods=['POST'])
 def analyze():
-    if 'user' not in session:
+    if 'user_id' not in session:
         return jsonify({"error": "Unauthorized"}), 401
-    
-    data = request.json
+
+    # 修正 1: 安全取得 JSON，防呆
+    data = request.get_json(silent=True) or {}
     content = data.get('content', '')
-    
     if not content:
         return jsonify({"error": "內容不能為空"}), 400
-    
-    result = simulate_legal_analysis(content)
-    
-    # Save to session history
-    if 'cases' not in session:
-        session['cases'] = []
-    
-    new_case = {
-        "id": len(session['cases']) + 1,
-        "title": f"新增分析：{content[:10]}...",
-        "date": time.strftime("%Y-%m-%d"),
-        "snippet": content[:50] + "..."
+
+    conversation_id = str(uuid.uuid4())
+    user_id = session['user_id']
+
+    payload = {
+        "userId": user_id,
+        "conversationId": conversation_id,
+        "content": content
     }
-    # Limit history to top 5
-    session['cases'].insert(0, new_case)
-    session['cases'] = session['cases'][:5]
-    session.modified = True
-    
-    return jsonify(result)
+
+    try:
+        # 修正 2: 增加 timeout 以及錯誤狀態檢查 (加長至 60 秒，Gemini 處理長文需要較久)
+        response = requests.post(NODE_API_URL, json=payload, timeout=60)
+        response.raise_for_status() 
+        
+        result = response.json()
+        ai_reply = result.get("aiResponse", "")
+        
+        # 同步存入 MongoDB (保險起見)
+        chats_collection.insert_one({
+            "userId": user_id,
+            "conversationId": conversation_id,
+            "message": content,
+            "aiResponse": ai_reply,
+            "createdAt": time.time()
+        })
+    except Exception as e:
+        return jsonify({"error": "Node.js AI 服務無法連線或處理失敗", "details": str(e)}), 500
+
+    return jsonify({
+        "conversationId": conversation_id,
+        "aiResponse": ai_reply
+    })
+
 
 @app.route('/logout')
 def logout():
-    session.pop('user', None)
-    session.pop('cases', None)
+    session.pop('user_id', None)
+    session.pop('username', None)
     return redirect(url_for('index'))
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5002) 
-
+    app.run(debug=True, port=5002)
