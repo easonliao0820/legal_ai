@@ -131,5 +131,34 @@ def logout():
     session.pop('username', None)
     return redirect(url_for('index'))
 
+# --- Auto-start Node.js Server ---
+import subprocess
+import atexit
+
+node_process = None
+
+def cleanup_node_server():
+    global node_process
+    if node_process:
+        print("\n=== [System] Terminating Node.js AI Server ===")
+        node_process.terminate()
+        try:
+            node_process.wait(timeout=3)
+        except Exception:
+            node_process.kill()
+
+atexit.register(cleanup_node_server)
+
 if __name__ == '__main__':
+    # Flask in debug mode restarts the script. We only want to spawn Node from the parent process.
+    if os.environ.get("WERKZEUG_RUN_MAIN") != "true":
+        print("\n=== [System] Starting Node.js AI Server on port 5003... ===")
+        node_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "node")
+        # Uses Popen to start node server in the background
+        node_process = subprocess.Popen(
+            ["node", "server.js"],
+            cwd=node_dir,
+            shell=True # For Windows compatibility
+        )
+
     app.run(debug=True, port=5002)
