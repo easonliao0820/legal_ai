@@ -153,28 +153,9 @@ textarea#doc-content:focus {
 
 .result-area {
     flex-grow: 1;
-    padding: 25px;
+    padding: 20px;
     overflow-y: auto;
-    height: 0; /* Important for flex-grow scrolling container */
-    scrollbar-width: thin;
-    scrollbar-color: var(--primary-light) transparent;
 }
-
-/* Custom scrollbar for Webkit */
-.result-area::-webkit-scrollbar {
-    width: 6px;
-}
-
-.result-area::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-.result-area::-webkit-scrollbar-thumb {
-    background-color: var(--primary-light);
-    border-radius: 20px;
-    opacity: 0.5;
-}
-
 
 .status-badge {
     padding: 4px 12px;

@@ -89,14 +89,7 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
 
         resultsContent.innerHTML = html;
-        
-        // Auto scroll to bottom
-        resultArea.scrollTo({
-            top: resultArea.scrollHeight,
-            behavior: 'smooth'
-        });
     }
-
 
     function resetUI() {
         loadingSpinner.classList.add('hidden');
