@@ -5,16 +5,21 @@ import hashlib
 import uuid
 from pymongo import MongoClient
 import time
+from dotenv import load_dotenv
+
+# 載入 .env 檔案
+load_dotenv()
 
 app = Flask(__name__)
-app.secret_key = "legal_ai_secure_key" # In production, use environment variables
+app.secret_key = os.getenv("FLASK_SECRET_KEY", "legal_ai_secure_key")
 
 # ---------------- MongoDB ----------------
-MONGO_URI = "mongodb://127.0.0.1:27017/"
+MONGO_URI = os.getenv("MONGO_URI", "mongodb://127.0.0.1:27017/")
 client = MongoClient(MONGO_URI)
 db = client["ai_law"]
 users_collection = db["users"]
 chats_collection = db["chats"]
+
 
 # --- 自動初始化資料庫 (Auto-Init) ---
 try:
@@ -142,6 +147,7 @@ def analyze():
             "createdAt": time.time()
         })
     except Exception as e:
+        print(f"❌ [/analyze] 錯誤: {e}")
         return jsonify({"error": "Node.js AI 服務無法連線或處理失敗", "details": str(e)}), 500
 
     return jsonify({
@@ -159,10 +165,11 @@ def logout():
 # --- Auto-start Node.js Server ---
 import subprocess
 import atexit
+import sys
 
 node_process = None
 
-def cleanup_node_server():
+def cleanup_node_server(*args, **kwargs):
     global node_process
     if node_process:
         print("\n=== [System] Terminating Node.js AI Server ===")
@@ -179,11 +186,20 @@ if __name__ == '__main__':
     if os.environ.get("WERKZEUG_RUN_MAIN") != "true":
         print("\n=== [System] Starting Node.js AI Server on port 5003... ===")
         node_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "node")
+        
+        # Determine if we are on Windows
+        is_windows = os.name == 'nt'
+        
         # Uses Popen to start node server in the background
+        # Pipe stderr to stdout so we can see Node errors in the Flask console
         node_process = subprocess.Popen(
             ["node", "server.js"],
             cwd=node_dir,
-            shell=True # For Windows compatibility
+            shell=is_windows,
+            stdout=sys.stdout,
+            stderr=sys.stderr
         )
 
     app.run(debug=True, port=5002)
+
+
