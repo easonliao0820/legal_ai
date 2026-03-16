@@ -1,83 +1,31 @@
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for, make_response
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for, make_response, send_file
+from datetime import datetime
 import os
-import requests
 import hashlib
 import uuid
-from pymongo import MongoClient
 import time
-import tempfile
-import zipfile
-import shutil
-import rarfile
-import py7zr
+import json
 import subprocess
-from judicial_api import JudicialOpenDataAPI
+import atexit
+
+# Modular Imports
+from core.database import db, init_db
+from core.ai_service import AIService
+from core.judicial_client import JudicialOpenDataAPI
+from utils.file_handler import FileHandler
 
 app = Flask(__name__)
-app.secret_key = "legal_ai_secure_key" # In production, use environment variables
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", "legal_ai_secure_key")
 
-# ---------------- MongoDB ----------------
-MONGO_URI = "mongodb://127.0.0.1:27017/"
-client = MongoClient(MONGO_URI)
-db = client["ai_law"]
-users_collection = db["users"]
-chats_collection = db["chats"]
-
-# --- 自動初始化資料庫 (Auto-Init) ---
-try:
-    if users_collection.count_documents({}) == 0:
-        print("\n=== [System] 檢測到資料庫為空，正在進行自動初始化... ===")
-        # 建立預設帳號
-        users_collection.insert_one({
-            "username": "admin",
-            "password": "password123", # 您的登入邏輯目前比對明文
-            "email": "admin@legal-ai.tw",
-            "createdAt": time.time()
-        })
-        # 建立預設對話紀錄
-        chats_collection.insert_one({
-            "userId": "system",
-            "conversationId": "init-check",
-            "message": "系統初始化",
-            "aiResponse": "歡迎使用 AI 法律諮詢助理，資料庫已成功建立。",
-            "createdAt": time.time()
-        })
-        print("=== [System] 預設帳號 admin / password123 建立完成 ===\n")
-except Exception as e:
-    print(f"\n⚠️ [Warning] 資料庫初始化檢查失敗: {e}")
-    print("請確保 MongoDB 服務已啟動。\n")
-
-
-# ---------------- Node.js AI API ----------------
+# Service Initializations
 NODE_API_URL = "http://localhost:5003/api/analyze"
+ai_service = AIService(NODE_API_URL)
+judicial_api = JudicialOpenDataAPI()
 
-# --- Mock AI Logic ---
-# Since we are not connecting to the real API yet, we simulate the comparison
-def simulate_legal_analysis(content):
-    # This simulates comparing user documents with "Ministry of Justice" patterns
-    time.sleep(2) # Simulate processing time
-    
-    analysis = {
-        "score": 85,
-        "recommendations": [
-            {
-                "title": "訴訟策略建議 (Litigation Strategy)",
-                "content": "根據法務部相似判例，本案件建議強調『事實發生之不可抗力性』。文件內對於時間點的描述需更精確以強化證據效力。"
-            },
-            {
-                "title": "文件內容優化 (Document Improvement)",
-                "content": "建議在第三段加入具體的損害賠償計算基礎。目前內容較為籠統，比對歷史判決後，具體化數額能增加法官採信度。"
-            },
-            {
-                "title": "法規比對提醒 (Legal Pattern Match)",
-                "content": "偵測到與民法第 184 條相關之敘述，建議補充行為人與損害間之因果關係說明。"
-            }
-        ],
-        "status": "已完成 AI 比對分析"
-    }
-    return analysis
+# Initialize Database on Startup
+init_db()
 
-# --- Routes ---
+# ---------------- Auth Routes ----------------
 
 @app.route('/')
 def index():
@@ -93,8 +41,8 @@ def login():
     if not username or not password:
         return redirect(url_for('index'))
 
-    password_hash = hashlib.sha256(password.encode()).hexdigest()
-    user = users_collection.find_one({"username": username, "password": password})
+    # Simplified login (matches user password as is for now)
+    user = db.users.find_one({"username": username, "password": password})
 
     if user:
         session['user_id'] = str(user["_id"])
@@ -103,60 +51,78 @@ def login():
     else:
         return render_template('login.html', error="帳號或密碼錯誤")
 
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('index'))
+
+# ---------------- Dashboard & AI Routes ----------------
+
 @app.route('/dashboard')
 def dashboard():
     if 'user_id' not in session:
         return redirect(url_for('index'))
 
-    # 查詢該使用者的最近 5 筆聊天紀錄
-    chats = list(chats_collection.find({"userId": session['user_id']}).sort("createdAt", -1).limit(5))
+    # Fetch and format recent chats for the sidebar
+    recent_chats = list(db.chats.find({"userId": session['user_id']}).sort("createdAt", -1).limit(5))
+    cases = []
+    for chat in recent_chats:
+        content = chat.get('content', chat.get('message', ''))
+        created_at = chat.get('createdAt')
+        
+        date_str = "未知時間"
+        if created_at:
+            if isinstance(created_at, (int, float)):
+                date_str = datetime.fromtimestamp(created_at).strftime("%Y-%m-%d %H:%M")
+            elif hasattr(created_at, 'strftime'):
+                date_str = created_at.strftime("%Y-%m-%d %H:%M")
+        
+        cases.append({
+            "id": str(chat.get('_id')),
+            "title": content[:15] + ("..." if len(content) > 15 else ""),
+            "date": date_str,
+            "snippet": content[:50] + ("..." if len(content) > 50 else "")
+        })
+    
     analyze_text = request.args.get('analyze_text', '')
-    return render_template('dashboard.html', username=session['username'], chats=chats, prefill_text=analyze_text)
+    return render_template('dashboard.html', username=session['username'], cases=cases, prefill_text=analyze_text)
 
 @app.route('/analyze', methods=['POST'])
 def analyze():
     if 'user_id' not in session:
         return jsonify({"error": "Unauthorized"}), 401
 
-    # 修正 1: 安全取得 JSON，防呆
     data = request.get_json(silent=True) or {}
     content = data.get('content', '')
     if not content:
         return jsonify({"error": "內容不能為空"}), 400
 
-    conversation_id = str(uuid.uuid4())
+    conv_id = str(uuid.uuid4())
     user_id = session['user_id']
 
-    payload = {
-        "userId": user_id,
-        "conversationId": conversation_id,
-        "content": content
-    }
-
     try:
-        # 修正 2: 增加 timeout 以及錯誤狀態檢查 (加長至 60 秒，Gemini 處理長文需要較久)
-        response = requests.post(NODE_API_URL, json=payload, timeout=60)
-        response.raise_for_status() 
-        
-        result = response.json()
+        # Call Node.js AI Service
+        result = ai_service.analyze_content(user_id, conv_id, content)
         ai_reply = result.get("aiResponse", "")
         
-        # 同步存入 MongoDB (保險起見)
-        chats_collection.insert_one({
+        # Save to DB
+        db.chats.insert_one({
             "userId": user_id,
-            "conversationId": conversation_id,
-            "message": content,
+            "conversationId": conv_id,
+            "content": content,
+            "message": content, # Legacy support
             "aiResponse": ai_reply,
             "createdAt": time.time()
         })
     except Exception as e:
-        return jsonify({"error": "Node.js AI 服務無法連線或處理失敗", "details": str(e)}), 500
+        return jsonify({"error": "AI 處理失敗", "details": str(e)}), 500
 
     return jsonify({
-        "conversationId": conversation_id,
+        "conversationId": conv_id,
         "aiResponse": ai_reply
     })
 
+# ---------------- Judicial Data Routes ----------------
 
 @app.route('/judicial_data')
 @app.route('/judicial_data/<category_no>')
@@ -164,27 +130,27 @@ def judicial_data(category_no=None):
     if 'user_id' not in session:
         return redirect(url_for('index'))
 
-    api = JudicialOpenDataAPI()
     try:
-        all_categories = api.get_categories()
-        # 排除對一般民眾較無用的分類：統計、預算、支出、諮詢、代碼等
-        exclude_keywords = ['統計', '預算', '支出', '諮詢', '代碼']
-        categories = [
-            cat for cat in all_categories 
-            if not any(kw in cat['categoryName'] for kw in exclude_keywords)
-        ]
-        categories.reverse() # 倒敘顯示
+        all_categories = judicial_api.get_categories()
+        # Filter unwanted categories
+        exclude_kw = ['統計', '預算', '支出', '諮詢', '代碼']
+        categories = [c for c in all_categories if not any(kw in c['categoryName'] for kw in exclude_kw)]
+        categories.reverse()
     except Exception as e:
         categories = []
-        print(f"Error fetching categories: {e}")
+        print(f"API Error: {e}")
 
     resources = []
+    search_query = request.args.get('search', '').strip().lower()
+    
     if category_no:
         try:
-            resources = api.get_category_resources(category_no)
-            resources.reverse() # 倒敘顯示
+            resources = judicial_api.get_category_resources(category_no)
+            if search_query:
+                resources = [r for r in resources if search_query in r['title'].lower() or search_query in r.get('description', '').lower()]
+            resources.reverse()
         except Exception as e:
-            print(f"Error fetching resources for {category_no}: {e}")
+            print(f"Resource Load Error: {e}")
 
     return render_template('judicial_data.html', 
                            username=session.get('username'),
@@ -197,27 +163,19 @@ def judicial_download(file_set_id, format):
     if 'user_id' not in session:
         return redirect(url_for('index'))
 
-    api = JudicialOpenDataAPI()
     try:
-        data = api.get_file(file_set_id)
-        
-        # Determine if data is JSON (dict/list)
+        data = judicial_api.get_file(file_set_id)
         if isinstance(data, (dict, list)):
-            # It's JSON parsed by our API client
-            import json
-            response = make_response(json.dumps(data, ensure_ascii=False))
-            response.headers["Content-Disposition"] = f"attachment; filename=dataset_{file_set_id}.json"
-            response.headers["Content-Type"] = "application/json; charset=utf-8"
-            return response
+            resp = make_response(json.dumps(data, ensure_ascii=False))
+            resp.headers["Content-Disposition"] = f"attachment; filename=ds_{file_set_id}.json"
+            resp.headers["Content-Type"] = "application/json; charset=utf-8"
+            return resp
         else:
-            # It's raw bytes (like CSV, 7Z, etc.)
-            response = make_response(data)
-            ext = format.lower() if format else "bin"
-            response.headers["Content-Disposition"] = f"attachment; filename=dataset_{file_set_id}.{ext}"
-            return response
-            
+            resp = make_response(data)
+            resp.headers["Content-Disposition"] = f"attachment; filename=ds_{file_set_id}.{format.lower()}"
+            return resp
     except Exception as e:
-        return f"下載檔案失敗: {e}", 500
+        return f"下載失敗: {e}", 500
 
 @app.route('/judicial_preview/<file_set_id>/<format>')
 def judicial_preview(file_set_id, format):
@@ -225,97 +183,58 @@ def judicial_preview(file_set_id, format):
         return redirect(url_for('index'))
         
     cache_dir = f"/tmp/legal_ai_cache/{file_set_id}"
-    api = JudicialOpenDataAPI()
     
-    if not os.path.exists(cache_dir):
+    # Check cache
+    if not os.path.exists(cache_dir) or not os.listdir(cache_dir):
+        FileHandler.cleanup_dir(cache_dir)
         os.makedirs(cache_dir, exist_ok=True)
         try:
-            data = api.get_file(file_set_id)
+            data = judicial_api.get_file(file_set_id)
             if not isinstance(data, bytes):
-                import json
-                with open(os.path.join(cache_dir, f"dataset_{file_set_id}.json"), "w", encoding="utf-8") as f:
+                with open(os.path.join(cache_dir, f"data.json"), "w", encoding="utf-8") as f:
                     json.dump(data, f, ensure_ascii=False)
             else:
-                archive_path = os.path.join(cache_dir, f"temp.{format.lower()}")
-                with open(archive_path, "wb") as f:
+                temp_path = os.path.join(cache_dir, f"temp.{format.lower()}")
+                with open(temp_path, "wb") as f:
                     f.write(data)
                 
-                fmt = format.lower()
-                try:
-                    if fmt == '7z':
-                        with py7zr.SevenZipFile(archive_path, 'r') as z:
-                            z.extractall(cache_dir)
-                    elif fmt == 'zip':
-                        with zipfile.ZipFile(archive_path, 'r') as z:
-                            z.extractall(cache_dir)
-                    elif fmt == 'rar':
-                        # Use bsdtar because unrar is often missing on Mac
-                        try:
-                            subprocess.run(['bsdtar', '-xf', archive_path, '-C', cache_dir], check=True)
-                        except Exception as e:
-                            # Fallback to rarfile if bsdtar fails
-                            with rarfile.RarFile(archive_path, 'r') as z:
-                                z.extractall(cache_dir)
-                except Exception as e:
-                    pass # Migh not be an archive, ignore extraction error
+                # Use util for extraction
+                extracted = FileHandler.extract_archive(temp_path, cache_dir, format)
                 
-                if os.path.exists(archive_path):
-                    os.remove(archive_path)
+                if extracted and os.path.exists(temp_path):
+                    os.remove(temp_path)
+                elif not extracted:
+                    os.rename(temp_path, os.path.join(cache_dir, f"data.{format.lower()}"))
         except Exception as e:
-            # Cleanup if failed
-            shutil.rmtree(cache_dir, ignore_errors=True)
-            return f"處理資料失敗: {e}", 500
+            FileHandler.cleanup_dir(cache_dir)
+            return f"處理失敗: {e}", 500
             
-    # List files
+    # File listing for sidebar
     all_files = []
     for root, _, files in os.walk(cache_dir):
         for f in files:
             if f.startswith('.'): continue
-            rel_path = os.path.relpath(os.path.join(root, f), cache_dir)
-            all_files.append(rel_path)
+            all_files.append(os.path.relpath(os.path.join(root, f), cache_dir))
             
     selected_file = request.args.get('file')
-    content = None
-    json_data = None
-    error = None
+    content, json_data, error = None, None, None
     
     if selected_file and selected_file in all_files:
         filepath = os.path.join(cache_dir, selected_file)
-        try:
-            with open(filepath, 'rb') as f:
-                raw_bytes = f.read(1024 * 500) # Read up to 500KB
-                
-                # Check encoding
+        text_content = FileHandler.read_text_file(filepath)
+        
+        if text_content:
+            if selected_file.lower().endswith('.json'):
                 try:
-                    text_content = raw_bytes.decode('utf-8')
-                except UnicodeDecodeError:
-                    try:
-                        text_content = raw_bytes.decode('big5')
-                    except Exception:
-                        text_content = None
-                
-                if text_content:
-                    if selected_file.lower().endswith('.json'):
-                        try:
-                            import json
-                            json_parsed = json.loads(text_content)
-                            # If it's a list with one item (sometimes Judicial data is wrapped)
-                            if isinstance(json_parsed, list) and len(json_parsed) > 0:
-                                json_data = json_parsed[0]
-                            else:
-                                json_data = json_parsed
-                            
-                            # If it has JFULL, we extract it for prominent display
-                            if isinstance(json_data, dict) and 'JFULL' in json_data:
-                                content = json_data.get('JFULL', '')
-                            else:
-                                content = text_content
-                        except:
-                            content = text_content
-                    else:
-                        content = text_content
-        except Exception as e:
-            error = f"讀取檔案失敗: {e}"
+                    json_parsed = json.loads(text_content)
+                    json_data = json_parsed[0] if isinstance(json_parsed, list) and len(json_parsed) > 0 else json_parsed
+                    content = json_data.get('JFULL', text_content) if isinstance(json_data, dict) else text_content
+                except:
+                    content = text_content
+            else:
+                content = text_content
+        else:
+            error = "無法讀取該檔案編碼或檔案為二進制格式"
             
     return render_template('judicial_preview.html',
                            file_set_id=file_set_id,
@@ -330,44 +249,25 @@ def judicial_preview_download(file_set_id, filepath):
     cache_dir = f"/tmp/legal_ai_cache/{file_set_id}"
     full_path = os.path.join(cache_dir, filepath)
     if os.path.exists(full_path) and os.path.abspath(full_path).startswith(os.path.abspath(cache_dir)):
-        from flask import send_file
         return send_file(full_path, as_attachment=True)
     return "檔案不存在", 404
 
-@app.route('/logout')
-def logout():
-    session.pop('user_id', None)
-    session.pop('username', None)
-    return redirect(url_for('index'))
-
-# --- Auto-start Node.js Server ---
-import subprocess
-import atexit
+# ---------------- Process Management ----------------
 
 node_process = None
 
-def cleanup_node_server():
+def stop_node():
     global node_process
     if node_process:
-        print("\n=== [System] Terminating Node.js AI Server ===")
+        print("\n=== [System] Stopping Node AI Server ===")
         node_process.terminate()
-        try:
-            node_process.wait(timeout=3)
-        except Exception:
-            node_process.kill()
 
-atexit.register(cleanup_node_server)
+atexit.register(stop_node)
 
 if __name__ == '__main__':
-    # Flask in debug mode restarts the script. We only want to spawn Node from the parent process.
     if os.environ.get("WERKZEUG_RUN_MAIN") != "true":
-        print("\n=== [System] Starting Node.js AI Server on port 5003... ===")
-        node_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "node")
-        # Uses Popen to start node server in the background
-        node_process = subprocess.Popen(
-            ["node", "server.js"],
-            cwd=node_dir,
-            shell=True # For Windows compatibility
-        )
+        print("\n=== [System] Starting Background Node AI Server... ===")
+        node_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "node")
+        node_process = subprocess.Popen(["node", "server.js"], cwd=node_path, shell=True)
 
     app.run(debug=True, port=5002)

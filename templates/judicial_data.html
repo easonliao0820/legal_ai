@@ -16,9 +16,21 @@
                 <p style="color: var(--text-dim);">司法院主題分類與資料源查詢</p>
             </div>
             <div style="display: flex; gap: 20px; align-items: center;">
-                <a href="{{ url_for('dashboard') }}" style="color: var(--text-dim); text-decoration: none; transition: color 0.3s;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-dim)'">
-                    <i class="fas fa-home"></i> 回儀表板
-                </a>
+                <div style="display: flex; gap: 15px; align-items: center;">
+                    <form action="{{ url_for('judicial_data') }}" method="get" style="display: flex; gap: 10px;">
+                        <input type="hidden" name="category" value="{{ selected_category }}">
+                        <div style="position: relative;">
+                            <input type="text" name="search" placeholder="關鍵字搜尋 (例如: 裁判書)..." 
+                                value="{{ request.args.get('search', '') }}"
+                                style="padding: 8px 15px 8px 35px; border-radius: 20px; border: 1px solid var(--glass-border); background: rgba(255,255,255,0.05); color: #fff; width: 250px; outline: none;">
+                            <i class="fas fa-search" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-dim); font-size: 0.8rem;"></i>
+                        </div>
+                        <button type="submit" class="btn-primary" style="padding: 8px 20px; font-size: 0.8rem;">搜尋</button>
+                    </form>
+                    <a href="{{ url_for('dashboard') }}" style="color: var(--text-dim); text-decoration: none; transition: color 0.3s;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-dim)'">
+                        <i class="fas fa-arrow-left"></i> 返回儀表板
+                    </a>
+                </div>
                 <a href="{{ url_for('logout') }}" style="color: var(--text-dim); text-decoration: none; transition: color 0.3s;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-dim)'">
                     <i class="fas fa-sign-out-alt"></i> 登出
                 </a>
