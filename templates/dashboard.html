@@ -15,9 +15,14 @@
                 <h2 style="font-size: 1.8rem;">歡迎回來, {{ username }}</h2>
                 <p style="color: var(--text-dim);">開始您的法律文件 AI 比對分析</p>
             </div>
-            <a href="{{ url_for('logout') }}" style="color: var(--text-dim); text-decoration: none;">
-                <i class="fas fa-sign-out-alt"></i> 登出
-            </a>
+            <div style="display: flex; gap: 20px; align-items: center;">
+                <a href="{{ url_for('judicial_data') }}" style="color: var(--text-dim); text-decoration: none; transition: color 0.3s;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-dim)'">
+                    <i class="fas fa-database"></i> 司法院開放資料
+                </a>
+                <a href="{{ url_for('logout') }}" style="color: var(--text-dim); text-decoration: none; transition: color 0.3s;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-dim)'">
+                    <i class="fas fa-sign-out-alt"></i> 登出
+                </a>
+            </div>
         </header>
 
         <div class="main-grid">
