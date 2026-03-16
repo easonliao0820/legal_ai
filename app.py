@@ -51,6 +51,34 @@ def login():
     else:
         return render_template('login.html', error="帳號或密碼錯誤")
 
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        username = request.form.get('username')
+        email = request.form.get('email')
+        password = request.form.get('password')
+        confirm_password = request.form.get('confirm_password')
+
+        if password != confirm_password:
+            return render_template('register.html', error="兩次輸入的密碼不一致")
+
+        if db.users.find_one({"username": username}):
+            return render_template('register.html', error="該用戶名稱已被註冊")
+
+        if db.users.find_one({"email": email}):
+            return render_template('register.html', error="該電子郵件已被註冊")
+
+        # Create new user
+        db.users.insert_one({
+            "username": username,
+            "password": password, # In production, use hashing!
+            "email": email,
+            "createdAt": time.time()
+        })
+        return redirect(url_for('index'))
+
+    return render_template('register.html')
+
 @app.route('/logout')
 def logout():
     session.clear()

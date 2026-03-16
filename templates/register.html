@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>註冊 | AI 法律諮詢助理</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div class="auth-container">
+        <div class="login-card glass-panel">
+            <div class="logo-section">
+                <i class="fas fa-user-plus logo-icon"></i>
+                <h1>建立新帳號</h1>
+                <p>加入專業的法律文件 AI 比對系統</p>
+            </div>
+            
+            {% if error %}
+            <div style="color: #ff6b6b; margin-bottom: 20px; font-size: 0.9rem; background: rgba(255,107,107,0.1); padding: 10px; border-radius: 8px;">
+                <i class="fas fa-exclamation-circle"></i> {{ error }}
+            </div>
+            {% endif %}
+
+            <form action="{{ url_for('register') }}" method="POST">
+                <div class="input-group">
+                    <label for="username">用戶名稱</label>
+                    <input type="text" id="username" name="username" placeholder="請設定您的登入名稱" required>
+                </div>
+                <div class="input-group">
+                    <label for="email">電子郵件</label>
+                    <input type="email" id="email" name="email" placeholder="example@legal.ai" required>
+                </div>
+                <div class="input-group">
+                    <label for="password">設定密碼</label>
+                    <input type="password" id="password" name="password" placeholder="請設定登入密碼" required>
+                </div>
+                <div class="input-group">
+                    <label for="confirm_password">確認密碼</label>
+                    <input type="password" id="confirm_password" name="confirm_password" placeholder="請再次輸入密碼" required>
+                </div>
+                <button type="submit" class="btn-primary">立即註冊</button>
+            </form>
+            
+            <div style="margin-top: 25px; font-size: 0.9rem;">
+                <span style="color: var(--text-dim);">已經有帳號了？</span>
+                <a href="{{ url_for('index') }}" style="color: var(--accent); text-decoration: none; font-weight: 600; margin-left: 5px;">返回登入</a>
+            </div>
+
+            <div style="margin-top: 30px; font-size: 0.8rem; color: var(--text-dim);">
+                &copy; 2026 AI Legal Assistant. All Rights Reserved.
+            </div>
+        </div>
+    </div>
+</body>
+</html>
