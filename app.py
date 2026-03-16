@@ -1,10 +1,11 @@
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for, make_response
 import os
 import requests
 import hashlib
 import uuid
 from pymongo import MongoClient
 import time
+from judicial_api import JudicialOpenDataAPI
 
 app = Flask(__name__)
 app.secret_key = "legal_ai_secure_key" # In production, use environment variables
@@ -149,6 +150,59 @@ def analyze():
         "aiResponse": ai_reply
     })
 
+
+@app.route('/judicial_data')
+@app.route('/judicial_data/<category_no>')
+def judicial_data(category_no=None):
+    if 'user_id' not in session:
+        return redirect(url_for('index'))
+
+    api = JudicialOpenDataAPI()
+    try:
+        categories = api.get_categories()
+    except Exception as e:
+        categories = []
+        print(f"Error fetching categories: {e}")
+
+    resources = []
+    if category_no:
+        try:
+            resources = api.get_category_resources(category_no)
+        except Exception as e:
+            print(f"Error fetching resources for {category_no}: {e}")
+
+    return render_template('judicial_data.html', 
+                           username=session.get('username'),
+                           categories=categories,
+                           selected_category=category_no,
+                           resources=resources)
+
+@app.route('/judicial_download/<file_set_id>/<format>')
+def judicial_download(file_set_id, format):
+    if 'user_id' not in session:
+        return redirect(url_for('index'))
+
+    api = JudicialOpenDataAPI()
+    try:
+        data = api.get_file(file_set_id)
+        
+        # Determine if data is JSON (dict/list)
+        if isinstance(data, (dict, list)):
+            # It's JSON parsed by our API client
+            import json
+            response = make_response(json.dumps(data, ensure_ascii=False))
+            response.headers["Content-Disposition"] = f"attachment; filename=dataset_{file_set_id}.json"
+            response.headers["Content-Type"] = "application/json; charset=utf-8"
+            return response
+        else:
+            # It's raw bytes (like CSV, 7Z, etc.)
+            response = make_response(data)
+            ext = format.lower() if format else "bin"
+            response.headers["Content-Disposition"] = f"attachment; filename=dataset_{file_set_id}.{ext}"
+            return response
+            
+    except Exception as e:
+        return f"下載檔案失敗: {e}", 500
 
 @app.route('/logout')
 def logout():

@@ -1,0 +1,36 @@
+.category-item {
+    padding: 15px;
+    border-bottom: 1px solid var(--glass-border);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-decoration: none;
+    display: block;
+    color: var(--text-color);
+}
+.category-item:hover, .category-item.active {
+    background: rgba(255, 255, 255, 0.1);
+    border-left: 4px solid var(--accent);
+}
+.resource-card {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--glass-border);
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 15px;
+}
+.resource-title {
+    font-size: 1.2rem;
+    color: var(--accent);
+    margin-bottom: 10px;
+}
+.fileset-badge {
+    display: inline-block;
+    background: rgba(100, 200, 255, 0.1);
+    padding: 10px;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    margin-right: 10px;
+    margin-top: 10px;
+    border: 1px solid rgba(100, 200, 255, 0.2);
+    vertical-align: top;
+}
