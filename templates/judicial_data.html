@@ -67,11 +67,25 @@
                                     <strong style="color: var(--text-color);"><i class="fas fa-folder-open"></i> 檔案集 (Filesets):</strong><br>
                                     <div style="display: flex; flex-wrap: wrap; gap: 10px;">
                                     {% for fs in res.filesets %}
-                                        <a href="{{ url_for('judicial_download', file_set_id=fs.fileSetId, format=fs.resourceFormat) }}" class="fileset-badge" style="text-decoration: none; display: inline-block; transition: all 0.2s;" onmouseover="this.style.background='rgba(100, 200, 255, 0.2)'" onmouseout="this.style.background='rgba(100, 200, 255, 0.1)'">
-                                            <div style="font-weight: 600; color: #fff;"><i class="fas fa-file-download"></i> 格式: {{ fs.resourceFormat }}</div>
-                                            <div style="font-size: 0.85rem; margin-top: 4px; color: var(--text-dim);">FileSet ID: {{ fs.fileSetId }}</div>
-                                            <div style="font-size: 0.85rem; margin-top: 2px; color: #aaa;">{{ fs.resourceDescription }}</div>
-                                        </a>
+                                        <div class="fileset-row" style="display: flex; align-items: center; justify-content: space-between; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--glass-border); border-radius: 8px; padding: 12px 20px; margin-bottom: 10px; width: 100%; transition: all 0.3s;" onmouseover="this.style.borderColor='var(--accent)';" onmouseout="this.style.borderColor='var(--glass-border)';" >
+                                            <div style="flex: 1;">
+                                                <div style="display: flex; align-items: center; gap: 15px;">
+                                                    <span style="background: rgba(100, 200, 255, 0.1); color: var(--primary-light); padding: 4px 10px; border-radius: 4px; font-weight: 700; font-size: 0.85rem;">{{ fs.resourceFormat }}</span>
+                                                    <div>
+                                                        <div style="font-weight: 600; color: #fff;">FileSet ID: {{ fs.fileSetId }}</div>
+                                                        <div style="font-size: 0.85rem; color: var(--text-dim);">{{ fs.resourceDescription }}</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div style="display: flex; gap: 12px;">
+                                                <a href="{{ url_for('judicial_preview', file_set_id=fs.fileSetId, format=fs.resourceFormat) }}" style="text-decoration: none; color: #fff; background: rgba(59, 130, 246, 0.6); padding: 8px 16px; border-radius: 6px; font-size: 0.9rem; transition: all 0.2s; display: flex; align-items: center; gap: 6px;" onmouseover="this.style.background='var(--primary-light)'" onmouseout="this.style.background='rgba(59, 130, 246, 0.6)'">
+                                                    <i class="fas fa-search-plus"></i> 線上預覽
+                                                </a>
+                                                <a href="{{ url_for('judicial_download', file_set_id=fs.fileSetId, format=fs.resourceFormat) }}" style="text-decoration: none; color: #28a745; border: 1px solid #28a745; padding: 8px 16px; border-radius: 6px; font-size: 0.9rem; transition: all 0.2s; display: flex; align-items: center; gap: 6px;" onmouseover="this.style.background='#28a745'; this.style.color='#fff'" onmouseout="this.style.background='transparent'; this.style.color='#28a745'">
+                                                    <i class="fas fa-download"></i> 下載檔案
+                                                </a>
+                                            </div>
+                                        </div>
                                     {% endfor %}
                                     </div>
                                 </div>

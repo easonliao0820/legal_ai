@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>資料集結構預覽 | AI 法律諮詢助理</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .file-item {
+            padding: 10px 15px;
+            border-bottom: 1px solid var(--glass-border);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: block;
+            color: var(--text-color);
+            font-size: 0.9rem;
+            word-break: break-all;
+        }
+        .file-item:hover, .file-item.active {
+            background: rgba(100, 200, 255, 0.1);
+            border-left: 4px solid var(--accent);
+        }
+        .file-item i {
+            margin-right: 8px;
+            color: #aaa;
+        }
+        .download-btn {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .download-btn:hover {
+            background: #218838;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <header class="header">
+            <div>
+                <h2 style="font-size: 1.8rem;">資料集解壓縮預覽 (ID: {{ file_set_id }})</h2>
+                <p style="color: var(--text-dim);">點擊左側檔案列表查看內容，或直接下載特定檔案</p>
+            </div>
+            <div style="display: flex; gap: 20px; align-items: center;">
+                <a href="{{ url_for('judicial_data') }}" style="color: var(--text-dim); text-decoration: none; transition: color 0.3s;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-dim)'">
+                    <i class="fas fa-arrow-left"></i> 回上一頁
+                </a>
+            </div>
+        </header>
+
+        <div class="main-grid" style="grid-template-columns: 320px 1fr;">
+            <!-- Sidebar: File List -->
+            <div class="sidebar glass-panel" style="overflow-y: auto; max-height: calc(100vh - 120px);">
+                <div class="panel-header">
+                    <h3><i class="fas fa-folder-open" style="color: var(--accent);"></i> 檔案列表 ({{ files|length }} 個)</h3>
+                </div>
+                <div class="case-list">
+                    {% for file in files %}
+                    <a href="?file={{ file | urlencode }}" 
+                       class="file-item {% if selected_file == file %}active{% endif %}">
+                        {% if file.endswith('.csv') %}
+                            <i class="fas fa-file-csv" style="color: #28a745;"></i>
+                        {% elif file.endswith('.xml') %}
+                            <i class="fas fa-file-code" style="color: #e34f26;"></i>
+                        {% elif file.endswith('.json') %}
+                            <i class="fas fa-file-alt" style="color: #f7df1e;"></i>
+                        {% elif file.endswith('.txt') %}
+                            <i class="fas fa-file-alt"></i>
+                        {% else %}
+                            <i class="fas fa-file"></i>
+                        {% endif %}
+                        {{ file }}
+                    </a>
+                    {% endfor %}
+                    {% if files|length == 0 %}
+                    <div style="padding: 20px; text-align: center; color: var(--text-dim);">
+                        此壓縮檔內無檔案或無法解壓縮
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Main: File Preview -->
+            <div class="editor-section glass-panel" style="overflow-y: auto; max-height: calc(100vh - 120px);">
+                <div class="panel-header">
+                    <h3><i class="fas fa-eye" style="color: var(--accent);"></i> 
+                        {% if selected_file %}
+                            預覽: {{ selected_file.split('/')[-1] }}
+                        {% else %}
+                            請選擇左側檔案
+                        {% endif %}
+                    </h3>
+                    {% if selected_file %}
+                    <a href="{{ url_for('judicial_preview_download', file_set_id=file_set_id, filepath=selected_file) }}" class="download-btn">
+                        <i class="fas fa-download"></i> 下載此檔案
+                    </a>
+                    {% endif %}
+                </div>
+                
+                <div style="padding: 20px;">
+                    {% if selected_file %}
+                        {% if error %}
+                            <div style="color: #ff6b6b; padding: 15px; background: rgba(255,107,107,0.1); border-radius: 8px;">
+                                <i class="fas fa-exclamation-triangle"></i> {{ error }}
+                            </div>
+                        {% elif content is not none %}
+                            {% if json_data %}
+                                <!-- Judicial Meta Data Card -->
+                                <div style="background: rgba(100, 200, 255, 0.05); border: 1px solid var(--glass-border); border-radius: 8px; padding: 15px; margin-bottom: 20px;">
+                                    <h4 style="color: var(--accent); margin-top: 0; margin-bottom: 10px;"><i class="fas fa-info-circle"></i> 案件基本資料</h4>
+                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 0.9rem;">
+                                        <div><span style="color: var(--text-dim);">案件編號：</span>{{ json_data.get('JNO', '無') }}</div>
+                                        <div><span style="color: var(--text-dim);">裁判日期：</span>{{ json_data.get('JDATE', '無') }}</div>
+                                        <div><span style="color: var(--text-dim);">案件類別：</span>{{ json_data.get('JTITLE', '無') }}</div>
+                                    </div>
+                                </div>
+                                <h4 style="color: var(--text-color); margin-bottom: 15px;"><i class="fas fa-file-alt"></i> 裁判全文 (JFULL)</h4>
+                            {% endif %}
+                            
+                            <pre style="background: #1e1e1e; padding: 20px; border-radius: 8px; overflow-x: auto; color: #e0e0e0; font-family: 'PingFang TC', 'Microsoft JhengHei', monospace; line-height: 1.8; font-size: 1rem; white-space: pre-wrap; word-wrap: break-word; max-height: 60vh; overflow-y: auto; border: 1px solid #333;">{{ content }}</pre>
+                            
+                            <div style="margin-top: 15px; display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;">
+                                <div style="font-size: 0.85rem; color: var(--text-dim); flex: 1; min-width: 200px;">
+                                    *為避面影響效能，僅顯示前 100 筆資料或部分內容，完整內容請下載查閱
+                                </div>
+                                <div style="display: flex; gap: 10px;">
+                                    <button onclick="copyContent()" style="background: rgba(255,255,255,0.1); border: 1px solid var(--glass-border); color: #fff; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 0.9rem; display: flex; align-items: center; gap: 6px; transition: all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.2)'" onmouseout="this.style.background='rgba(255,255,255,0.1)'">
+                                        <i class="fas fa-copy"></i> 複製內文
+                                    </button>
+                                    <button onclick="analyzeWithAI()" style="background: linear-gradient(135deg, var(--primary), var(--primary-light)); border: none; color: #fff; padding: 8px 20px; border-radius: 6px; cursor: pointer; font-size: 0.9rem; font-weight: 600; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3); transition: all 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
+                                        <i class="fas fa-brain"></i> 交給 AI 分析案件
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <form id="ai-analyze-form" action="{{ url_for('dashboard') }}" method="GET" style="display: none;">
+                                <input type="hidden" name="analyze_text" id="analyze-text-input">
+                            </form>
+                            
+                            <script>
+                                function copyContent() {
+                                    const pre = document.querySelector('pre');
+                                    navigator.clipboard.writeText(pre.innerText).then(() => {
+                                        const btn = event.currentTarget;
+                                        const originalHTML = btn.innerHTML;
+                                        btn.innerHTML = '<i class="fas fa-check"></i> 已複製';
+                                        setTimeout(() => btn.innerHTML = originalHTML, 2000);
+                                    });
+                                }
+                                
+                                function analyzeWithAI() {
+                                    const pre = document.querySelector('pre');
+                                    const text = pre.innerText;
+                                    document.getElementById('analyze-text-input').value = text;
+                                    document.getElementById('ai-analyze-form').submit();
+                                }
+                            </script>
+                        {% else %}
+                            <div style="text-align: center; margin-top: 60px; color: var(--text-dim);">
+                                <i class="fas fa-file-archive" style="font-size: 3rem; opacity: 0.3; margin-bottom: 20px;"></i>
+                                <p>此檔案格式不支援網頁文字預覽，請點擊右上角按鈕下載後查看。</p>
+                            </div>
+                        {% endif %}
+                    {% else %}
+                        <div style="text-align: center; margin-top: 80px; color: var(--text-dim);">
+                            <i class="fas fa-hand-pointer" style="font-size: 4rem; opacity: 0.3; margin-bottom: 20px;"></i>
+                            <h4 style="font-size: 1.5rem; color: var(--text-color); margin-bottom: 10px;">檔案預覽</h4>
+                            <p>點擊左側檔案列表，即可在網頁上直接預覽文字或表格內容</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

@@ -61,14 +61,15 @@ h1, h2, h3 {
     grid-template-columns: 320px 1fr 1.5fr;
     gap: 25px;
     align-items: stretch;
-    min-height: 85vh;
+    height: calc(100vh - 140px); /* Fixed height based on viewport */
+    min-height: 600px;
 }
 
 .sidebar, .editor-section, .analysis-section {
     height: 100%;
-    min-height: 750px;
     display: flex;
     flex-direction: column;
+    overflow: hidden; /* Prevent the panel itself from scrolling */
 }
 
 .panel-header {
@@ -226,3 +227,27 @@ textarea#doc-content:focus {
 }
 
 .hidden { display: none; }
+
+/* Custom Scrollbar Styles */
+::-webkit-scrollbar {
+    width: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(212, 175, 55, 0.3);
+}
+
+/* Ensure smooth scrolling */
+.case-list, .result-area, textarea#doc-content {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+}

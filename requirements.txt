@@ -1,3 +1,5 @@
 flask
 requests
 pymongo
+py7zr
+rarfile

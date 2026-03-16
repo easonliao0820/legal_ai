@@ -5,6 +5,12 @@ import hashlib
 import uuid
 from pymongo import MongoClient
 import time
+import tempfile
+import zipfile
+import shutil
+import rarfile
+import py7zr
+import subprocess
 from judicial_api import JudicialOpenDataAPI
 
 app = Flask(__name__)
@@ -104,7 +110,8 @@ def dashboard():
 
     # 查詢該使用者的最近 5 筆聊天紀錄
     chats = list(chats_collection.find({"userId": session['user_id']}).sort("createdAt", -1).limit(5))
-    return render_template('dashboard.html', username=session['username'], chats=chats)
+    analyze_text = request.args.get('analyze_text', '')
+    return render_template('dashboard.html', username=session['username'], chats=chats, prefill_text=analyze_text)
 
 @app.route('/analyze', methods=['POST'])
 def analyze():
@@ -159,7 +166,14 @@ def judicial_data(category_no=None):
 
     api = JudicialOpenDataAPI()
     try:
-        categories = api.get_categories()
+        all_categories = api.get_categories()
+        # 排除對一般民眾較無用的分類：統計、預算、支出、諮詢、代碼等
+        exclude_keywords = ['統計', '預算', '支出', '諮詢', '代碼']
+        categories = [
+            cat for cat in all_categories 
+            if not any(kw in cat['categoryName'] for kw in exclude_keywords)
+        ]
+        categories.reverse() # 倒敘顯示
     except Exception as e:
         categories = []
         print(f"Error fetching categories: {e}")
@@ -168,6 +182,7 @@ def judicial_data(category_no=None):
     if category_no:
         try:
             resources = api.get_category_resources(category_no)
+            resources.reverse() # 倒敘顯示
         except Exception as e:
             print(f"Error fetching resources for {category_no}: {e}")
 
@@ -203,6 +218,121 @@ def judicial_download(file_set_id, format):
             
     except Exception as e:
         return f"下載檔案失敗: {e}", 500
+
+@app.route('/judicial_preview/<file_set_id>/<format>')
+def judicial_preview(file_set_id, format):
+    if 'user_id' not in session:
+        return redirect(url_for('index'))
+        
+    cache_dir = f"/tmp/legal_ai_cache/{file_set_id}"
+    api = JudicialOpenDataAPI()
+    
+    if not os.path.exists(cache_dir):
+        os.makedirs(cache_dir, exist_ok=True)
+        try:
+            data = api.get_file(file_set_id)
+            if not isinstance(data, bytes):
+                import json
+                with open(os.path.join(cache_dir, f"dataset_{file_set_id}.json"), "w", encoding="utf-8") as f:
+                    json.dump(data, f, ensure_ascii=False)
+            else:
+                archive_path = os.path.join(cache_dir, f"temp.{format.lower()}")
+                with open(archive_path, "wb") as f:
+                    f.write(data)
+                
+                fmt = format.lower()
+                try:
+                    if fmt == '7z':
+                        with py7zr.SevenZipFile(archive_path, 'r') as z:
+                            z.extractall(cache_dir)
+                    elif fmt == 'zip':
+                        with zipfile.ZipFile(archive_path, 'r') as z:
+                            z.extractall(cache_dir)
+                    elif fmt == 'rar':
+                        # Use bsdtar because unrar is often missing on Mac
+                        try:
+                            subprocess.run(['bsdtar', '-xf', archive_path, '-C', cache_dir], check=True)
+                        except Exception as e:
+                            # Fallback to rarfile if bsdtar fails
+                            with rarfile.RarFile(archive_path, 'r') as z:
+                                z.extractall(cache_dir)
+                except Exception as e:
+                    pass # Migh not be an archive, ignore extraction error
+                
+                if os.path.exists(archive_path):
+                    os.remove(archive_path)
+        except Exception as e:
+            # Cleanup if failed
+            shutil.rmtree(cache_dir, ignore_errors=True)
+            return f"處理資料失敗: {e}", 500
+            
+    # List files
+    all_files = []
+    for root, _, files in os.walk(cache_dir):
+        for f in files:
+            if f.startswith('.'): continue
+            rel_path = os.path.relpath(os.path.join(root, f), cache_dir)
+            all_files.append(rel_path)
+            
+    selected_file = request.args.get('file')
+    content = None
+    json_data = None
+    error = None
+    
+    if selected_file and selected_file in all_files:
+        filepath = os.path.join(cache_dir, selected_file)
+        try:
+            with open(filepath, 'rb') as f:
+                raw_bytes = f.read(1024 * 500) # Read up to 500KB
+                
+                # Check encoding
+                try:
+                    text_content = raw_bytes.decode('utf-8')
+                except UnicodeDecodeError:
+                    try:
+                        text_content = raw_bytes.decode('big5')
+                    except Exception:
+                        text_content = None
+                
+                if text_content:
+                    if selected_file.lower().endswith('.json'):
+                        try:
+                            import json
+                            json_parsed = json.loads(text_content)
+                            # If it's a list with one item (sometimes Judicial data is wrapped)
+                            if isinstance(json_parsed, list) and len(json_parsed) > 0:
+                                json_data = json_parsed[0]
+                            else:
+                                json_data = json_parsed
+                            
+                            # If it has JFULL, we extract it for prominent display
+                            if isinstance(json_data, dict) and 'JFULL' in json_data:
+                                content = json_data.get('JFULL', '')
+                            else:
+                                content = text_content
+                        except:
+                            content = text_content
+                    else:
+                        content = text_content
+        except Exception as e:
+            error = f"讀取檔案失敗: {e}"
+            
+    return render_template('judicial_preview.html',
+                           file_set_id=file_set_id,
+                           files=sorted(all_files),
+                           selected_file=selected_file,
+                           content=content,
+                           json_data=json_data,
+                           error=error)
+
+@app.route('/judicial_preview_download/<file_set_id>/<path:filepath>')
+def judicial_preview_download(file_set_id, filepath):
+    cache_dir = f"/tmp/legal_ai_cache/{file_set_id}"
+    full_path = os.path.join(cache_dir, filepath)
+    if os.path.exists(full_path) and os.path.abspath(full_path).startswith(os.path.abspath(cache_dir)):
+        from flask import send_file
+        return send_file(full_path, as_attachment=True)
+    return "檔案不存在", 404
 
 @app.route('/logout')
 def logout():

@@ -1,0 +1,5 @@
+--- (1-1) 取得主題分類 ---
+[{'categoryNo': '001', 'categoryName': '其他'}, {'categoryNo': '002', 'categoryName': '政府統計'}]
+
+--- (1-2) 取得特定分類資料源清單 ---
+[{'datasetId': 49318, 'title': '115年1月司法院及所屬各級法院之終結案', 'categoryName': '其他', 'filesets': [{'fileSetId': 61497, 'resourceFormat': '7Z', 'resourceDescription': '115年1月司法院及所屬各級法院之終結案件資料'}, {'fileSetId': 61498, 'resourceFormat': '7Z', 'resourceDescription': '司法統計系統資料欄位說明'}]}]

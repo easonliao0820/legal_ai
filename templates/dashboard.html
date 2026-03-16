@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,6 +9,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 
 </head>
+
 <body>
     <div class="dashboard">
         <header class="header">
@@ -16,10 +18,14 @@
                 <p style="color: var(--text-dim);">開始您的法律文件 AI 比對分析</p>
             </div>
             <div style="display: flex; gap: 20px; align-items: center;">
-                <a href="{{ url_for('judicial_data') }}" style="color: var(--text-dim); text-decoration: none; transition: color 0.3s;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-dim)'">
+                <a href="{{ url_for('judicial_data') }}"
+                    style="color: var(--text-dim); text-decoration: none; transition: color 0.3s;"
+                    onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-dim)'">
                     <i class="fas fa-database"></i> 司法院開放資料
                 </a>
-                <a href="{{ url_for('logout') }}" style="color: var(--text-dim); text-decoration: none; transition: color 0.3s;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-dim)'">
+                <a href="{{ url_for('logout') }}"
+                    style="color: var(--text-dim); text-decoration: none; transition: color 0.3s;"
+                    onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text-dim)'">
                     <i class="fas fa-sign-out-alt"></i> 登出
                 </a>
             </div>
@@ -50,7 +56,7 @@
                     <h3><i class="fas fa-file-contract" style="color: var(--accent);"></i> 專案文件內容</h3>
                     <span class="status-badge badge-blue">編輯中</span>
                 </div>
-                <textarea id="doc-content" placeholder="請在此貼上或輸入您的法律文件內容、起訴狀或專案計畫書..."></textarea>
+                <textarea id="doc-content" placeholder="請在此貼上或輸入您的法律文件內容、起訴狀或專案計畫書...">{{ prefill_text }}</textarea>
                 <div style="padding: 20px; border-top: 1px solid var(--glass-border);">
                     <button id="analyze-btn" class="btn-primary">
                         <i class="fas fa-magic"></i> 開始 AI 比對分析
@@ -69,7 +75,7 @@
                         <i class="fas fa-brain" style="font-size: 3rem; margin-bottom: 20px; opacity: 0.5;"></i>
                         <p>請在左側輸入內容並點擊「開始分析」<br>系統將比對法務部相關數據並提供專業建議</p>
                     </div>
-                    
+
                     <div id="loading-spinner" class="hidden" style="text-align: center; margin-top: 50px;">
                         <span class="loader"></span>
                         <p style="margin-top: 15px; color: var(--accent);">AI 正在檢索法務部資料庫並比對中...</p>
@@ -86,4 +92,5 @@
 
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>
+
 </html>
